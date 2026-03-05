@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HK Webinar Planlægning - Efterår 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&family=Fraunces:wght@600;700;800&display=swap');
+        
+        * {
+            font-family: 'Work Sans', sans-serif;
+        }
+        
+        .heading-font {
+            font-family: 'Fraunces', serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+        }
+        
+        .calendar-day {
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .calendar-day:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .webinar-card {
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .status-badge {
+            transition: all 0.2s ease;
+        }
+        
+        .status-badge:hover {
+            transform: scale(1.05);
+        }
+        
+        .copy-button {
+            transition: all 0.2s ease;
+        }
+        
+        .copy-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .copy-button:active {
+            transform: scale(0.95);
+        }
+        
+        .modal-backdrop {
+            animation: fadeIn 0.2s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .hk-gradient {
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+        }
+        
+        .filter-button {
+            transition: all 0.2s ease;
+        }
+        
+        .filter-button:hover {
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Webinar typer med farver
+        const WEBINAR_TYPES = {
+            'TechWeek': { color: 'bg-blue-100 text-blue-800 border-blue-300', label: 'TechWeek' },
+            'DataDays': { color: 'bg-green-100 text-green-800 border-green-300', label: 'DataDays' },
+            'Basis': { color: 'bg-orange-100 text-orange-800 border-orange-300', label: 'Basisudbud' },
+            'Arbejdsmiljø': { color: 'bg-purple-100 text-purple-800 border-purple-300', label: 'Arbejdsmiljø' },
+            'Karriere': { color: 'bg-teal-100 text-teal-800 border-teal-300', label: 'Karriere & Efteruddannelse' }
+        };
+
+        // Status workflow
+        const STATUS_TYPES = {
+            'planned': { label: 'Planlagt', color: 'bg-gray-100 text-gray-700', icon: '📋' },
+            'description': { label: 'Under beskrivelse', color: 'bg-yellow-100 text-yellow-800', icon: '✍️' },
+            'ready': { label: 'Klar til kursussystem', color: 'bg-blue-100 text-blue-800', icon: '✓' },
+            'published': { label: 'Publiceret', color: 'bg-green-100 text-green-800', icon: '🎉' }
+        };
+
+        // Måneder for efterår 2026
+        const MONTHS = [
+            { name: 'August', year: 2026, startDay: 6, days: 31 },
+            { name: 'September', year: 2026, startDay: 2, days: 30 },
+            { name: 'Oktober', year: 2026, startDay: 4, days: 31 },
+            { name: 'November', year: 2026, startDay: 0, days: 30 },
+            { name: 'December', year: 2026, startDay: 2, days: 31 }
+        ];
+
+        const WEEKDAYS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+
+        // Copy til clipboard funktion
+        const copyToClipboard = async (text, label) => {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert(`✓ ${label} kopieret!`);
+            } catch (err) {
+                alert('Kunne ikke kopiere - prøv igen');
+            }
+        };
+
+        // Webinar Modal Component
+        function WebinarModal({ webinar, onClose, onSave, onDelete }) {
+            const [formData, setFormData] = useState(webinar || {
+                id: Date.now().toString(),
+                date: '',
+                time: '',
+                title: '',
+                type: 'Basis',
+                speaker: '',
+                targetGroup: '',
+                status: 'planned',
+                teaser: '',
+                description: '',
+                newsletter: '',
+                notes: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            const handleChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            return (
+                <div className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="modal-content bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="hk-gradient text-white p-6 rounded-t-2xl">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-bold heading-font">
+                                    {webinar ? 'Rediger Webinar' : 'Nyt Webinar'}
+                                </h2>
+                                <button onClick={onClose} className="text-white hover:text-gray-200 text-3xl leading-none">
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            {/* Basis info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Titel *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.title}
+                                        onChange={(e) => handleChange('title', e.target.value)}
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Type *</label>
+                                    <select
+                                        value={formData.type}
+                                        onChange={(e) => handleChange('type', e.target.value)}
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                        required
+                                    >
+                                        {Object.entries(WEBINAR_TYPES).map(([key, { label }]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Dato *</label>
+                                    <input
+                                        type="date"
+                                        value={formData.date}
+                                        onChange={(e) => handleChange('date', e.target.value)}
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tidspunkt *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.time}
+                                        onChange={(e) => handleChange('time', e.target.value)}
+                                        placeholder="f.eks. 9-10:30"
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Underviser/Speaker *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.speaker}
+                                        onChange={(e) => handleChange('speaker', e.target.value)}
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Målgruppe</label>
+                                    <input
+                                        type="text"
+                                        value={formData.targetGroup}
+                                        onChange={(e) => handleChange('targetGroup', e.target.value)}
+                                        placeholder="f.eks. HK-medlemmer med interesse for AI"
+                                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Status */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                                <select
+                                    value={formData.status}
+                                    onChange={(e) => handleChange('status', e.target.value)}
+                                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                >
+                                    {Object.entries(STATUS_TYPES).map(([key, { label, icon }]) => (
+                                        <option key={key} value={key}>{icon} {label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Teaser */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Teaser (kort sælgende tekst)
+                                </label>
+                                <textarea
+                                    value={formData.teaser}
+                                    onChange={(e) => handleChange('teaser', e.target.value)}
+                                    rows="3"
+                                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    placeholder="En kort sælgende tekst der fanger interesse..."
+                                />
+                            </div>
+
+                            {/* Beskrivelse */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Beskrivelse (detaljeret indhold)
+                                </label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => handleChange('description', e.target.value)}
+                                    rows="6"
+                                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    placeholder="Detaljeret beskrivelse af webinaret..."
+                                />
+                            </div>
+
+                            {/* Nyhedsbrev */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Nyhedsbrev-tekst (kortere version til nyhedsbrev)
+                                </label>
+                                <textarea
+                                    value={formData.newsletter}
+                                    onChange={(e) => handleChange('newsletter', e.target.value)}
+                                    rows="4"
+                                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    placeholder="Kortere version til nyhedsbrev..."
+                                />
+                            </div>
+
+                            {/* Interne notater */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Interne notater (vises ikke til medlemmer)
+                                </label>
+                                <textarea
+                                    value={formData.notes}
+                                    onChange={(e) => handleChange('notes', e.target.value)}
+                                    rows="2"
+                                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    placeholder="Interne noter om webinaret..."
+                                />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex justify-between pt-4 border-t">
+                                <div>
+                                    {webinar && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (confirm('Er du sikker på du vil slette dette webinar?')) {
+                                                    onDelete(webinar.id);
+                                                }
+                                            }}
+                                            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold"
+                                        >
+                                            Slet webinar
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
+                                    >
+                                        Annuller
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 hk-gradient text-white rounded-lg hover:shadow-lg font-semibold"
+                                    >
+                                        {webinar ? 'Gem ændringer' : 'Opret webinar'}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // Webinar Detail View Component
+        function WebinarDetailView({ webinar, onClose, onEdit }) {
+            if (!webinar) return null;
+
+            const typeInfo = WEBINAR_TYPES[webinar.type] || WEBINAR_TYPES['Basis'];
+            const statusInfo = STATUS_TYPES[webinar.status] || STATUS_TYPES['planned'];
+
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('da-DK', { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric' 
+                });
+            };
+
+            return (
+                <div className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="modal-content bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="hk-gradient text-white p-6 rounded-t-2xl">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <h2 className="text-2xl font-bold heading-font mb-2">{webinar.title}</h2>
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${typeInfo.color} border-2`}>
+                                            {typeInfo.label}
+                                        </span>
+                                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.color}`}>
+                                            {statusInfo.icon} {statusInfo.label}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button onClick={onClose} className="text-white hover:text-gray-200 text-3xl leading-none ml-4">
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Quick Actions */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onEdit}
+                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+                                >
+                                    ✏️ Rediger
+                                </button>
+                            </div>
+
+                            {/* Basis info med copy-knapper */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-sm font-semibold text-gray-600">Titel</span>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.title, 'Titel')}
+                                            className="copy-button text-gray-500 hover:text-blue-600"
+                                            title="Kopier titel"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-900 font-medium">{webinar.title}</p>
+                                </div>
+
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-sm font-semibold text-gray-600">Dato</span>
+                                        <button
+                                            onClick={() => copyToClipboard(formatDate(webinar.date), 'Dato')}
+                                            className="copy-button text-gray-500 hover:text-blue-600"
+                                            title="Kopier dato"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-900 font-medium">{formatDate(webinar.date)}</p>
+                                </div>
+
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-sm font-semibold text-gray-600">Tidspunkt</span>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.time, 'Tidspunkt')}
+                                            className="copy-button text-gray-500 hover:text-blue-600"
+                                            title="Kopier tidspunkt"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-900 font-medium">{webinar.time}</p>
+                                </div>
+
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-sm font-semibold text-gray-600">Underviser</span>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.speaker, 'Underviser')}
+                                            className="copy-button text-gray-500 hover:text-blue-600"
+                                            title="Kopier underviser"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-900 font-medium">{webinar.speaker}</p>
+                                </div>
+
+                                {webinar.targetGroup && (
+                                    <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-sm font-semibold text-gray-600">Målgruppe</span>
+                                            <button
+                                                onClick={() => copyToClipboard(webinar.targetGroup, 'Målgruppe')}
+                                                className="copy-button text-gray-500 hover:text-blue-600"
+                                                title="Kopier målgruppe"
+                                            >
+                                                📋
+                                            </button>
+                                        </div>
+                                        <p className="text-gray-900">{webinar.targetGroup}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Teaser */}
+                            {webinar.teaser && (
+                                <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="text-lg font-bold text-blue-900">Teaser</h3>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.teaser, 'Teaser')}
+                                            className="copy-button text-blue-600 hover:text-blue-800 text-xl"
+                                            title="Kopier teaser"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{webinar.teaser}</p>
+                                </div>
+                            )}
+
+                            {/* Beskrivelse */}
+                            {webinar.description && (
+                                <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="text-lg font-bold text-green-900">Beskrivelse</h3>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.description, 'Beskrivelse')}
+                                            className="copy-button text-green-600 hover:text-green-800 text-xl"
+                                            title="Kopier beskrivelse"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{webinar.description}</p>
+                                </div>
+                            )}
+
+                            {/* Nyhedsbrev */}
+                            {webinar.newsletter && (
+                                <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="text-lg font-bold text-purple-900">Nyhedsbrev-tekst</h3>
+                                        <button
+                                            onClick={() => copyToClipboard(webinar.newsletter, 'Nyhedsbrev-tekst')}
+                                            className="copy-button text-purple-600 hover:text-purple-800 text-xl"
+                                            title="Kopier nyhedsbrev-tekst"
+                                        >
+                                            📋
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{webinar.newsletter}</p>
+                                </div>
+                            )}
+
+                            {/* Interne notater */}
+                            {webinar.notes && (
+                                <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-200">
+                                    <h3 className="text-lg font-bold text-yellow-900 mb-2">Interne notater</h3>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{webinar.notes}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component
+        function App() {
+            const [webinars, setWebinars] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('calendar'); // 'calendar' or 'list'
+            const [calendarView, setCalendarView] = useState('all'); // 'all' or 'single'
+            const [selectedMonth, setSelectedMonth] = useState(0);
+            const [showModal, setShowModal] = useState(false);
+            const [editingWebinar, setEditingWebinar] = useState(null);
+            const [selectedWebinar, setSelectedWebinar] = useState(null);
+            const [filterType, setFilterType] = useState('all');
+            const [filterStatus, setFilterStatus] = useState('all');
+
+            // Load data fra storage
+            useEffect(() => {
+                loadWebinars();
+            }, []);
+
+            const loadWebinars = async () => {
+                try {
+                    const result = await window.storage.list('webinar:', true);
+                    if (result && result.keys) {
+                        const loadedWebinars = await Promise.all(
+                            result.keys.map(async (key) => {
+                                const data = await window.storage.get(key, true);
+                                return data ? JSON.parse(data.value) : null;
+                            })
+                        );
+                        setWebinars(loadedWebinars.filter(w => w !== null));
+                    }
+                } catch (error) {
+                    console.log('Starter med tom database');
+                }
+                setLoading(false);
+            };
+
+            const saveWebinar = async (webinar) => {
+                try {
+                    await window.storage.set(`webinar:${webinar.id}`, JSON.stringify(webinar), true);
+                    await loadWebinars();
+                    setShowModal(false);
+                    setEditingWebinar(null);
+                } catch (error) {
+                    alert('Kunne ikke gemme webinar. Prøv igen.');
+                }
+            };
+
+            const deleteWebinar = async (id) => {
+                try {
+                    await window.storage.delete(`webinar:${id}`, true);
+                    await loadWebinars();
+                    setShowModal(false);
+                    setEditingWebinar(null);
+                    setSelectedWebinar(null);
+                } catch (error) {
+                    alert('Kunne ikke slette webinar. Prøv igen.');
+                }
+            };
+
+            const getWebinarsForDate = (year, month, day) => {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                return webinars.filter(w => w.date === dateStr);
+            };
+
+            const filteredWebinars = webinars.filter(w => {
+                if (filterType !== 'all' && w.type !== filterType) return false;
+                if (filterStatus !== 'all' && w.status !== filterStatus) return false;
+                return true;
+            });
+
+            const renderCalendar = () => {
+                if (calendarView === 'all') {
+                    // Vis alle måneder
+                    return MONTHS.map((month, monthIndex) => (
+                        <div key={monthIndex} className="mb-8">
+                            <h3 className="text-2xl font-bold heading-font text-gray-800 mb-4 bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-lg border-l-4 border-red-500">
+                                {month.name} {month.year}
+                            </h3>
+                            <div className="bg-white rounded-xl shadow-md p-4">
+                                <div className="grid grid-cols-7 gap-2 mb-2">
+                                    {WEEKDAYS.map(day => (
+                                        <div key={day} className="text-center font-bold text-gray-700 p-2 text-sm">
+                                            {day}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-7 gap-2">
+                                    {renderMonthDays(month, monthIndex)}
+                                </div>
+                            </div>
+                        </div>
+                    ));
+                } else {
+                    // Vis kun valgt måned
+                    const month = MONTHS[selectedMonth];
+                    return (
+                        <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                            <div className="grid grid-cols-7 gap-2 mb-2">
+                                {WEEKDAYS.map(day => (
+                                    <div key={day} className="text-center font-bold text-gray-700 p-2">
+                                        {day}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-2">
+                                {renderMonthDays(month, selectedMonth)}
+                            </div>
+                        </div>
+                    );
+                }
+            };
+
+            const renderMonthDays = (month, monthIndex) => {
+                const firstDayOfWeek = month.startDay;
+                const daysInMonth = month.days;
+                
+                const calendarDays = [];
+                
+                // Tomme celler før første dag
+                for (let i = 0; i < firstDayOfWeek; i++) {
+                    calendarDays.push(<div key={`empty-${i}`} className="calendar-day p-2"></div>);
+                }
+                
+                // Dage i måneden
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dayWebinars = getWebinarsForDate(month.year, monthIndex + 7, day);
+                    
+                    calendarDays.push(
+                        <div
+                            key={day}
+                            className="calendar-day bg-white border-2 border-gray-200 rounded-lg p-2 min-h-[100px] hover:border-red-400 cursor-pointer"
+                            onClick={() => {
+                                setEditingWebinar({
+                                    id: Date.now().toString(),
+                                    date: `${month.year}-${String(monthIndex + 8).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                                    time: '',
+                                    title: '',
+                                    type: 'Basis',
+                                    speaker: '',
+                                    targetGroup: '',
+                                    status: 'planned',
+                                    teaser: '',
+                                    description: '',
+                                    newsletter: '',
+                                    notes: ''
+                                });
+                                setShowModal(true);
+                            }}
+                        >
+                            <div className="font-bold text-gray-700 mb-1 text-sm">{day}</div>
+                            <div className="space-y-1">
+                                {dayWebinars.map(webinar => {
+                                    const typeInfo = WEBINAR_TYPES[webinar.type] || WEBINAR_TYPES['Basis'];
+                                    return (
+                                        <div
+                                            key={webinar.id}
+                                            className={`webinar-card text-xs p-1 rounded border-2 ${typeInfo.color} cursor-pointer hover:shadow-md`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedWebinar(webinar);
+                                            }}
+                                        >
+                                            <div className="font-semibold truncate text-xs">{webinar.title}</div>
+                                            <div className="text-xs opacity-75">{webinar.time}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                }
+                
+                return calendarDays;
+            };
+
+            const renderListView = () => {
+                const sortedWebinars = [...filteredWebinars].sort((a, b) => 
+                    new Date(a.date) - new Date(b.date)
+                );
+
+                if (sortedWebinars.length === 0) {
+                    return (
+                        <div className="text-center py-12 text-gray-500">
+                            <p className="text-xl mb-2">Ingen webinarer fundet</p>
+                            <p>Prøv at ændre filtrene eller opret et nyt webinar</p>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="space-y-4">
+                        {sortedWebinars.map(webinar => {
+                            const typeInfo = WEBINAR_TYPES[webinar.type] || WEBINAR_TYPES['Basis'];
+                            const statusInfo = STATUS_TYPES[webinar.status] || STATUS_TYPES['planned'];
+                            
+                            return (
+                                <div
+                                    key={webinar.id}
+                                    className="webinar-card bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-red-300 cursor-pointer"
+                                    onClick={() => setSelectedWebinar(webinar)}
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="text-lg font-bold text-gray-900">{webinar.title}</h3>
+                                        <div className="flex gap-2">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${typeInfo.color} border-2`}>
+                                                {typeInfo.label}
+                                            </span>
+                                            <span className={`status-badge px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.color}`}>
+                                                {statusInfo.icon} {statusInfo.label}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600">
+                                        <div>
+                                            <span className="font-semibold">Dato:</span> {new Date(webinar.date).toLocaleDateString('da-DK')}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold">Tid:</span> {webinar.time}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold">Underviser:</span> {webinar.speaker}
+                                        </div>
+                                        {webinar.targetGroup && (
+                                            <div>
+                                                <span className="font-semibold">Målgruppe:</span> {webinar.targetGroup}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {webinar.teaser && (
+                                        <p className="mt-2 text-sm text-gray-700 line-clamp-2">{webinar.teaser}</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="text-4xl mb-4">⏳</div>
+                            <p className="text-xl text-gray-600">Indlæser webinarer...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    {/* Header */}
+                    <div className="max-w-7xl mx-auto mb-8">
+                        <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 border-4 border-red-200">
+                            <h1 className="text-4xl md:text-5xl font-bold heading-font text-gray-900 mb-2">
+                                HK Webinar Planlægning
+                            </h1>
+                            <p className="text-xl text-gray-600">Efterår 2026 • August - December</p>
+                            
+                            {/* Stats */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
+                                    <div className="text-3xl font-bold text-blue-900">{webinars.length}</div>
+                                    <div className="text-sm text-blue-700 font-semibold">Total webinarer</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-lg">
+                                    <div className="text-3xl font-bold text-yellow-900">
+                                        {webinars.filter(w => w.status === 'planned').length}
+                                    </div>
+                                    <div className="text-sm text-yellow-700 font-semibold">Planlagt</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg">
+                                    <div className="text-3xl font-bold text-purple-900">
+                                        {webinars.filter(w => w.status === 'description').length}
+                                    </div>
+                                    <div className="text-sm text-purple-700 font-semibold">Under beskrivelse</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
+                                    <div className="text-3xl font-bold text-green-900">
+                                        {webinars.filter(w => w.status === 'published').length}
+                                    </div>
+                                    <div className="text-sm text-green-700 font-semibold">Publiceret</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="max-w-7xl mx-auto mb-6">
+                        <div className="bg-white rounded-xl shadow-md p-4 flex flex-wrap gap-4 items-center justify-between">
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setView('calendar')}
+                                    className={`filter-button px-4 py-2 rounded-lg font-semibold ${
+                                        view === 'calendar' 
+                                            ? 'hk-gradient text-white' 
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    📅 Kalender
+                                </button>
+                                <button
+                                    onClick={() => setView('list')}
+                                    className={`filter-button px-4 py-2 rounded-lg font-semibold ${
+                                        view === 'list' 
+                                            ? 'hk-gradient text-white' 
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    📋 Liste
+                                </button>
+                            </div>
+
+                            {view === 'calendar' && (
+                                <div className="flex gap-2 items-center">
+                                    <button
+                                        onClick={() => setCalendarView('all')}
+                                        className={`filter-button px-4 py-2 rounded-lg font-semibold text-sm ${
+                                            calendarView === 'all' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Hele perioden
+                                    </button>
+                                    <button
+                                        onClick={() => setCalendarView('single')}
+                                        className={`filter-button px-4 py-2 rounded-lg font-semibold text-sm ${
+                                            calendarView === 'single' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Enkelt måned
+                                    </button>
+                                    {calendarView === 'single' && (
+                                        <select
+                                            value={selectedMonth}
+                                            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                            className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none font-semibold"
+                                        >
+                                            {MONTHS.map((month, idx) => (
+                                                <option key={idx} value={idx}>
+                                                    {month.name} {month.year}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+
+                            {view === 'list' && (
+                                <div className="flex gap-2">
+                                    <select
+                                        value={filterType}
+                                        onChange={(e) => setFilterType(e.target.value)}
+                                        className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    >
+                                        <option value="all">Alle typer</option>
+                                        {Object.entries(WEBINAR_TYPES).map(([key, { label }]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={filterStatus}
+                                        onChange={(e) => setFilterStatus(e.target.value)}
+                                        className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                                    >
+                                        <option value="all">Alle status</option>
+                                        {Object.entries(STATUS_TYPES).map(([key, { label, icon }]) => (
+                                            <option key={key} value={key}>{icon} {label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => {
+                                    setEditingWebinar(null);
+                                    setShowModal(true);
+                                }}
+                                className="filter-button px-6 py-2 hk-gradient text-white rounded-lg hover:shadow-lg font-bold"
+                            >
+                                + Nyt webinar
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="max-w-7xl mx-auto">
+                        {view === 'calendar' ? (
+                            <div>
+                                {renderCalendar()}
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                                {renderListView()}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modals */}
+                    {showModal && (
+                        <WebinarModal
+                            webinar={editingWebinar}
+                            onClose={() => {
+                                setShowModal(false);
+                                setEditingWebinar(null);
+                            }}
+                            onSave={saveWebinar}
+                            onDelete={deleteWebinar}
+                        />
+                    )}
+
+                    {selectedWebinar && !showModal && (
+                        <WebinarDetailView
+                            webinar={selectedWebinar}
+                            onClose={() => setSelectedWebinar(null)}
+                            onEdit={() => {
+                                setEditingWebinar(selectedWebinar);
+                                setShowModal(true);
+                                setSelectedWebinar(null);
+                            }}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Render app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
